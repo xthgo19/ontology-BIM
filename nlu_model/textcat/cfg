@@ -1,0 +1,9 @@
+{
+  "labels":[
+    "saudacao",
+    "despedida",
+    "perguntar_propriedade"
+  ],
+  "threshold":0.0,
+  "positive_label":null
+}

@@ -1,0 +1,43 @@
+# Ficheiro: docker-compose.yml
+# Descrição: Orquestra os serviços externos (Fuseki e Ollama) usando Docker.
+
+version: '3.8'
+
+services:
+  # Serviço para o Apache Jena Fuseki
+  fuseki:
+    image: stain/jena-fuseki:latest
+    container_name: fuseki-bim-server
+    ports:
+      # Mapeia a porta 3030 do seu PC para a porta 3030 do contentor.
+      - "3030:3030"
+    # O volume garante que a base de dados persiste mesmo que o contentor seja removido.
+    volumes:
+      - fuseki_data:/fuseki
+    environment:
+      # Define uma password de admin (opcional mas recomendado).
+      - ADMIN_PASSWORD=admin123 
+
+  # Serviço para o Ollama
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-server
+    ports:
+      # Mapeia a porta 11434 do seu PC para a porta 11434 do contentor.
+      - "11434:11434"
+    # O volume garante que os modelos descarregados persistem.
+    volumes:
+      - ollama_data:/root/.ollama
+    # Para utilizadores de Linux com GPU NVIDIA, pode descomentar as linhas abaixo para melhor performance.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+# Define os volumes que o Docker irá gerir para persistir os dados.
+volumes:
+  fuseki_data:
+  ollama_data:

@@ -1,0 +1,46 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <{SH}> .
+@prefix ifc: <{IFC_NS}> .
+@prefix prop: <{PROP_NS}> .
+
+# Regra 1: Paredes devem estar contidas em estruturas espaciais
+ifc:WallContainmentRule
+    a sh:NodeShape ;
+    sh:targetClass ifc:IfcWall ;
+    sh:property [
+        sh:path prop:ContainedInStructure ;
+        sh:class ifc:IfcSpatialStructureElement ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "Paredes devem estar contidas em exatamente uma estrutura espacial (andar/edifício)" ;
+    ] .
+
+# Regra 2: Portas devem ser instaladas em paredes
+ifc:DoorInstallationRule
+    a sh:NodeShape ;
+    sh:targetClass ifc:IfcDoor ;
+    sh:property [
+        sh:path prop:FillsVoids ;
+        sh:class ifc:IfcWall ;
+        sh:minCount 1 ;
+        sh:message "Portas devem ser instaladas em paredes" ;
+    ] .
+
+# Regra 3: Pisos devem ter relações com edificações
+ifc:SlabContainmentRule
+    a sh:NodeShape ;
+    sh:targetClass ifc:IfcSlab ;
+    sh:property [
+        sh:path prop:ContainedInStructure ;
+        sh:class ifc:IfcBuilding ;
+        sh:minCount 1 ;
+        sh:message "Pisos devem estar contidos em edificações" ;
+    ] .
+
+# Regra 4: Relações espaciais devem ter tipos válidos
+ifc:ValidRelationRule
+    a sh:PropertyShape ;
+    sh:path prop:RelatingSpace ;
+    sh:class ifc:IfcSpace ;
+    sh:message "Elementos só podem relacionar-se com espaços válidos" .

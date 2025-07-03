@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistente e Validador BIM Unificado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        #graph-container {
+            width: 100%; height: 500px; border: 1px solid #e2e8f0;
+            background-color: #f8fafc; border-radius: 0.5rem; position: relative;
+        }
+        .chatbot-container { height: 450px; }
+        .chat-message { animation: fadeIn 0.3s ease-out; }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px;
+            border-radius: 50%; border-left-color: #4f46e5; animation: spin 1s ease infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container mx-auto p-4 md:p-6">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Assistente e Validador BIM</h1>
+            <p class="text-md md:text-lg text-gray-600 mt-2">Carregue, valide e consulte os seus modelos IFC de forma inteligente.</p>
+        </header>
+
+        <section id="upload-section" class="bg-white p-6 rounded-xl shadow-lg mb-6">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">1. Carregar e Validar Modelo IFC</h2>
+            <form id="upload-form" enctype="multipart/form-data">
+                <div class="flex flex-col sm:flex-row items-center border-2 border-dashed border-gray-300 rounded-lg p-4">
+                    <input type="file" id="ifc-file" name="ifc_file" accept=".ifc" required class="w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100">
+                    <button type="submit" id="validate-btn" class="mt-4 sm:mt-0 sm:ml-4 w-full sm:w-auto flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
+                        Validar Modelo
+                    </button>
+                </div>
+            </form>
+            <div id="status-area" class="mt-4 text-center min-h-[2rem]"></div>
+        </section>
+
+        <div id="main-content" class="hidden">
+            <section id="report-section" class="bg-white p-6 rounded-xl shadow-lg mb-6">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800">2. Relatório de Validação</h2>
+                <div id="report-content" class="space-y-4 max-h-96 overflow-y-auto pr-2"></div>
+            </section>
+
+            <section id="query-section" class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col space-y-4">
+                    <h2 class="text-2xl font-semibold text-gray-800">3. Consulte o Modelo</h2>
+                    <div class="chatbot-container border border-gray-200 rounded-lg p-4 flex flex-col bg-gray-50">
+                        <div id="chat-window" class="flex-grow overflow-y-auto mb-4 space-y-4 pr-2"></div>
+                        <div class="flex">
+                            <input type="text" id="user-input" placeholder="Qual o material do 'floor'?" class="flex-grow border-2 border-gray-300 rounded-l-lg p-2 focus:outline-none focus:border-indigo-500">
+                            <button id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-r-lg">Enviar</button>
+                        </div>
+                    </div>
+                    <details class="bg-gray-50 border border-gray-200 rounded-lg">
+                        <summary class="p-4 cursor-pointer font-semibold text-gray-700">Construtor de Consultas</summary>
+                        <div class="p-4 border-t border-gray-200 space-y-4">
+                            <select id="relation-select" class="w-full p-2 border rounded-md"></select>
+                            <select id="object-select" class="w-full p-2 border rounded-md"></select>
+                            <button id="generate-query-btn" class="w-full bg-gray-600 text-white font-semibold p-2 rounded-lg hover:bg-gray-700 transition-colors" disabled>Gerar Pergunta</button>
+                        </div>
+                    </details>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold text-gray-800">Visualização do Grafo</h2>
+                        <button id="reset-btn" class="text-sm bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg">Resetar Vista</button>
+                    </div>
+                    <div id="graph-container"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('upload-form');
+        const validateBtn = document.getElementById('validate-btn');
+        const statusArea = document.getElementById('status-area');
+        const reportContent = document.getElementById('report-content');
+        const mainContent = document.getElementById('main-content');
+        const chatWindow = document.getElementById('chat-window');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const graphContainer = document.getElementById('graph-container');
+        const resetBtn = document.getElementById('reset-btn');
+        const relationSelect = document.getElementById('relation-select');
+        const objectSelect = document.getElementById('object-select');
+        const generateQueryBtn = document.getElementById('generate-query-btn');
+
+        let network = null;
+
+        const showStatus = (message, isError = false, isLoading = false) => {
+            let content = '';
+            if (isLoading) {
+                content = `<div class="flex justify-center items-center"><div class="spinner mr-3"></div><p>${message}</p></div>`;
+            } else {
+                content = `<p class="${isError ? 'text-red-600' : 'text-green-600'} font-semibold">${message}</p>`;
+            }
+            statusArea.innerHTML = content;
+        };
+
+        const renderReport = (results) => {
+            reportContent.innerHTML = '';
+            if (!results || results.length === 0) {
+                reportContent.innerHTML = '<p class="text-gray-500">Nenhum resultado de validação para exibir.</p>';
+                return;
+            }
+            results.forEach(item => {
+                let element = document.createElement('div');
+                if (item.type === 'SUCESSO') {
+                    element.className = 'p-4 bg-green-50 border-l-4 border-green-500 text-green-800 rounded';
+                    element.innerHTML = `<p class="font-bold">Sucesso</p><p>${item.message}</p>`;
+                } else if (item.type === 'CONFLITO') {
+                    element.className = 'p-4 bg-red-50 border-l-4 border-red-500 text-red-800 rounded';
+                    element.innerHTML = `<p class="font-bold">Conflito Encontrado</p><p><strong>Elemento:</strong> <code class="bg-red-100 p-1 rounded text-sm">${item.element}</code></p><p><strong>Mensagem:</strong> ${item.message}</p><p class="mt-2 pt-2 border-t border-red-200"><strong>Sugestão da IA:</strong> <span class="italic text-red-700">${item.suggestion_llm}</span></p>`;
+                } else if (item.type === 'ERRO') {
+                    element.className = 'p-4 bg-yellow-50 border-l-4 border-yellow-500 text-yellow-800 rounded';
+                    element.innerHTML = `<p class="font-bold">Aviso</p><p>${item.message}</p>`;
+                }
+                if(element) reportContent.appendChild(element);
+            });
+        };
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(uploadForm);
+            showStatus('A validar e a processar o modelo...', false, true);
+            validateBtn.disabled = true;
+            mainContent.classList.add('hidden');
+            try {
+                const response = await fetch('/validate', { method: 'POST', body: formData });
+                const results = await response.json();
+                if (!response.ok) throw new Error(results.error || `Erro do servidor: ${response.status}`);
+                showStatus('Validação e carregamento concluídos com sucesso!', false);
+                renderReport(results);
+                mainContent.classList.remove('hidden');
+                addChatMessage('Olá! O seu modelo foi validado e carregado. Pode começar a fazer perguntas.', 'bot');
+                populateOntologyExplorer();
+            } catch (error) {
+                showStatus(`Erro: ${error.message}`, true);
+            } finally {
+                validateBtn.disabled = false;
+            }
+        });
+
+        const addChatMessage = (message, sender) => {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message p-3 rounded-lg max-w-xs md:max-w-md break-words shadow-sm ${sender === 'user' ? 'bg-indigo-500 text-white self-end' : 'bg-gray-200 text-gray-800 self-start'}`;
+            messageDiv.innerHTML = message.replace(/\n/g, '<br>');
+            chatWindow.appendChild(messageDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        };
+
+        // --- INÍCIO DA CORREÇÃO ---
+        const drawGraph = (graphData) => {
+            if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
+                graphContainer.innerHTML = '<p class="p-4 text-gray-500 text-center">Nenhum dado de grafo para visualizar.</p>';
+                return;
+            }
+            const nodes = new vis.DataSet(graphData.nodes);
+            const edges = new vis.DataSet(graphData.edges);
+            const data = { nodes, edges };
+            const options = {
+                nodes: { shape: 'box', font: { size: 14, color: '#374151' }, borderWidth: 1, margin: 10, color: { background: '#fff', border: '#cbd5e1' } },
+                edges: { arrows: 'to', font: { align: 'middle', size: 12, color: '#4b5563' }, color: { color: '#94a3b8', highlight: '#64748b' }, smooth: true },
+                physics: { enabled: true, barnesHut: { gravitationalConstant: -15000, springLength: 250, avoidOverlap: 0.1 } },
+                interaction: { hover: true, navigationButtons: true, keyboard: true }
+            };
+            graphContainer.innerHTML = '';
+            network = new vis.Network(graphContainer, data, options);
+            network.on("stabilizationIterationsDone", () => network.setOptions({ physics: false }));
+        };
+
+        const sendMessage = async () => {
+            const question = userInput.value.trim();
+            if (!question) return;
+            addChatMessage(question, 'user');
+            userInput.value = '';
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question }),
+                });
+                const data = await response.json();
+                addChatMessage(data.answer, 'bot');
+                // Chama a função para desenhar o grafo com os dados recebidos
+                drawGraph(data.graph_data);
+            } catch (error) {
+                addChatMessage('Ocorreu um erro ao comunicar com o assistente.', 'bot');
+            }
+        };
+        // --- FIM DA CORREÇÃO ---
+
+        const populateOntologyExplorer = async () => {
+            try {
+                const response = await fetch('/ontology-summary');
+                const data = await response.json();
+                relationSelect.innerHTML = '<option value="">-- Selecione a Relação --</option>';
+                data.relations.forEach(rel => {
+                    const option = document.createElement('option');
+                    option.value = rel;
+                    option.textContent = rel;
+                    relationSelect.appendChild(option);
+                });
+                objectSelect.innerHTML = '<option value="">-- Selecione o Objeto --</option>';
+                data.types.forEach(type => {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = type.type;
+                    type.examples.forEach(ex => {
+                        const option = document.createElement('option');
+                        option.value = ex;
+                        option.textContent = ex;
+                        optgroup.appendChild(option);
+                    });
+                    objectSelect.appendChild(optgroup);
+                });
+            } catch (error) {
+                console.error("Erro ao popular construtor de consultas:", error);
+            }
+        };
+
+        const checkSelections = () => {
+            generateQueryBtn.disabled = !(relationSelect.value && objectSelect.value);
+        };
+
+        const generateQuestion = () => {
+            const relation = relationSelect.value;
+            const object = objectSelect.value;
+            if(!relation || !object) return;
+            let questionTemplate = `Qual a relação '${relation}' para o objeto '${object}'?`;
+            const relLower = relation.toLowerCase();
+            if (relLower.includes('material')) questionTemplate = `Qual o material do '${object}'?`;
+            else if (relLower.includes('iscontainedin')) questionTemplate = `Onde está o '${object}'?`;
+            else if (relLower.includes('isoftype')) questionTemplate = `Qual o tipo de '${object}'?`;
+            else if (relLower.includes('aggregates')) questionTemplate = `O que o '${object}' contém?`;
+            userInput.value = questionTemplate;
+            userInput.focus();
+        };
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => e.key === 'Enter' && sendMessage());
+        resetBtn.addEventListener('click', () => { if (network) network.destroy(); graphContainer.innerHTML = ''; });
+        relationSelect.addEventListener('change', checkSelections);
+        objectSelect.addEventListener('change', checkSelections);
+        generateQueryBtn.addEventListener('click', generateQuestion);
+
+    </script>
+</body>
+</html>

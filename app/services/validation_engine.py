@@ -39,7 +39,7 @@ def _populate_rdf_graph_for_validation(ifc_file_path):
 def _get_llm_suggestion(conflict_description):
     prompt = f"Você é um especialista em BIM. Forneça uma sugestão de correção clara e concisa para o seguinte conflito: {conflict_description}"
     try:
-        payload = {"model": "gemma:2b", "messages": [{"role": "user", "content": prompt}], "stream": False}
+        payload = {"model": "gemma3:4b", "messages": [{"role": "user", "content": prompt}], "stream": False}
         response = requests.post(current_app.config['OLLAMA_API_URL'], json=payload, timeout=60)
         response.raise_for_status()
         response_data = response.json()
@@ -52,16 +52,24 @@ def validate_model(ifc_file_path):
     current_app.logger.info("A iniciar validação...")
     data_graph = _populate_rdf_graph_for_validation(ifc_file_path)
     
-    # --- INÍCIO DA CORREÇÃO ---
-    # Converte o caminho do ficheiro de regras para um URI de ficheiro válido
     shacl_rules_path_str = current_app.config['SHACL_RULES_PATH']
     shacl_rules_uri = Path(shacl_rules_path_str).as_uri()
     current_app.logger.info(f"A carregar regras SHACL de: {shacl_rules_uri}")
     
     shacl_graph = Graph().parse(shacl_rules_uri, format="turtle")
-    # --- FIM DA CORREÇÃO ---
 
-    conforms, results_graph, _ = validate(data_graph, shacl_graph=shacl_graph, inference='rdfs')
+    conforms, results_graph, _ = validate(
+        data_graph, 
+        shacl_graph=shacl_graph, 
+        inference='rdfs', 
+        ont_graph=None,
+        advanced=True,
+        debug=False,
+        meta_shacl=False,
+        abort_on_first=False,
+        )
+    
+    print(f"Conformidade: {_}")
 
     validation_report = []
     if conforms:

@@ -1,8 +1,8 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix sh: <{SH}> .
-@prefix ifc: <{IFC_NS}> .
-@prefix prop: <{PROP_NS}> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ifc: <http://exemplo.org/ifc/> .
+@prefix prop: <http://exemplo.org/ifc/property#> .
 
 # Regra 1: Paredes devem estar contidas em estruturas espaciais
 ifc:WallContainmentRule

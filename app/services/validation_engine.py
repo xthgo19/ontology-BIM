@@ -1,10 +1,11 @@
+from pathlib import Path  # Importa a classe Path
+
 import ifcopenshell
-from rdflib import Graph, Namespace, Literal, RDF
-from rdflib.namespace import SH
-from pyshacl import validate
 import requests
 from flask import current_app
-from pathlib import Path # Importa a classe Path
+from pyshacl import validate
+from rdflib import RDF, Graph, Literal, Namespace
+from rdflib.namespace import SH
 
 IFC_NS = Namespace("http://exemplo.org/ifc/")
 PROP_NS = Namespace("http://exemplo.org/ifc/property#")
@@ -37,7 +38,7 @@ def _populate_rdf_graph_for_validation(ifc_file_path):
     return rdf_graph
 
 def _get_llm_suggestion(conflict_description):
-    prompt = f"Você é um especialista em BIM. Forneça uma sugestão de correção clara e concisa para o seguinte conflito: {conflict_description}"
+    prompt = f"Você é um especialista em BIM. Forneça uma sugestão de correção clara e concisa (menos de 2 linhas) para o seguinte conflito: {conflict_description}"
     try:
         payload = {"model": "gemma3:4b", "messages": [{"role": "user", "content": prompt}], "stream": False}
         response = requests.post(current_app.config['OLLAMA_API_URL'], json=payload, timeout=60)

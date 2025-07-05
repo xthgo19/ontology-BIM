@@ -4,6 +4,7 @@ from flask import render_template, request, jsonify, current_app
 from app import app
 from .services import validation_engine, fuseki_manager, chatbot_logic
 from .services.thermal_analysis import calculate_u_value
+from rdflib.namespace import RDFS
 
 @app.route("/")
 def index():
@@ -38,6 +39,19 @@ def ask_chatbot():
     if not data or "question" not in data: return jsonify({"error": "Pergunta não fornecida."}), 400
     return jsonify(chatbot_logic.process_user_question(data["question"]))
 
+@app.route('/graph-data')
+def get_graph_data():
+    object_name = request.args.get('object')
+    if not object_name: return jsonify({"nodes": [], "edges": []})
+    sparql = chatbot_logic._get_sparql_wrapper()
+    uri_query = f'PREFIX rdfs: <{RDFS}> SELECT ?s WHERE {{ ?s rdfs:label "{object_name}" . }} LIMIT 1'
+    sparql.setQuery(uri_query)
+    uri_results = sparql.query().convert()["results"]["bindings"]
+    if not uri_results: return jsonify({"nodes": [], "edges": []})
+    node_uri = uri_results[0]['s']['value']
+    graph_data = chatbot_logic._get_bidirectional_graph(node_uri, object_name)
+    return jsonify(graph_data)
+
 @app.route("/ontology-summary")
 def get_ontology_summary():
     try:
@@ -46,27 +60,14 @@ def get_ontology_summary():
         current_app.logger.error(f"Erro ao buscar resumo da ontologia: {e}", exc_info=True)
         return jsonify({"error": "Não foi possível obter os dados da ontologia."}), 500
 
-@app.route("/api/expand-graph", methods=["POST"])
-def expand_graph():
-    data = request.get_json()
-    if not data or "node_uri" not in data: return jsonify({"error": "URI do nó não fornecido."}), 400
-    try:
-        return jsonify(chatbot_logic.get_graph_for_node(data["node_uri"]))
-    except Exception as e:
-        current_app.logger.error(f"Erro ao focar no nó do grafo: {e}", exc_info=True)
-        return jsonify({"error": "Não foi possível obter os dados de foco do nó."}), 500
-
-# --- INÍCIO DO NOVO CÓDIGO ---
 @app.route("/api/full-graph")
 def full_graph():
-    """Endpoint para buscar o grafo completo."""
     try:
         graph_data = chatbot_logic.get_full_graph()
         return jsonify(graph_data)
     except Exception as e:
         current_app.logger.error(f"Erro ao buscar o grafo completo: {e}", exc_info=True)
         return jsonify({"error": "Não foi possível gerar o grafo completo."}), 500
-# --- FIM DO NOVO CÓDIGO ---
 
 @app.route("/calculate_u_value", methods=["POST"])
 def calculate_u_value_route():
@@ -80,5 +81,3 @@ def calculate_u_value_route():
     except Exception as e:
         current_app.logger.error(f"Erro ao calcular o valor U: {e}", exc_info=True)
         return jsonify({"error": "Ocorreu um erro ao calcular o valor U."}), 500
-
-

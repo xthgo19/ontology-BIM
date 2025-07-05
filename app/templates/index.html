@@ -47,7 +47,7 @@
                     <div class="chatbot-container border border-gray-200 rounded-lg p-4 flex flex-col bg-gray-50">
                         <div id="chat-window" class="flex-grow overflow-y-auto mb-4 space-y-4 pr-2"></div>
                         <div class="flex">
-                            <input type="text" id="user-input" placeholder="Qual o material do 'floor'?" class="flex-grow border-2 border-gray-300 rounded-l-lg p-2 focus:border-indigo-500">
+                            <input type="text" id="user-input" placeholder="Qual o material de 'floor'?" class="flex-grow border-2 border-gray-300 rounded-l-lg p-2 focus:border-indigo-500">
                             <button id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-r-lg">Enviar</button>
                         </div>
                     </div>
@@ -75,248 +75,186 @@
     </div>
 
     <script>
-        const uploadForm = document.getElementById('upload-form');
-        const validateBtn = document.getElementById('validate-btn');
-        const statusArea = document.getElementById('status-area');
-        const reportContent = document.getElementById('report-content');
-        const mainContent = document.getElementById('main-content');
-        const chatWindow = document.getElementById('chat-window');
-        const userInput = document.getElementById('user-input');
-        const sendBtn = document.getElementById('send-btn');
-        const graphContainer = document.getElementById('graph-container');
-        const resetBtn = document.getElementById('reset-btn');
-        const fullGraphBtn = document.getElementById('full-graph-btn');
-        const relationSelect = document.getElementById('relation-select');
-        const objectSelect = document.getElementById('object-select');
-        const generateQueryBtn = document.getElementById('generate-query-btn');
+        document.addEventListener('DOMContentLoaded', () => {
+            const uploadForm = document.getElementById('upload-form');
+            const validateBtn = document.getElementById('validate-btn');
+            const statusArea = document.getElementById('status-area');
+            const reportContent = document.getElementById('report-content');
+            const mainContent = document.getElementById('main-content');
+            const chatWindow = document.getElementById('chat-window');
+            const userInput = document.getElementById('user-input');
+            const sendBtn = document.getElementById('send-btn');
+            const graphContainer = document.getElementById('graph-container');
+            const resetBtn = document.getElementById('reset-btn');
+            const fullGraphBtn = document.getElementById('full-graph-btn');
+            const relationSelect = document.getElementById('relation-select');
+            const objectSelect = document.getElementById('object-select');
+            const generateQueryBtn = document.getElementById('generate-query-btn');
 
-        let network = null;
-        let allNodes = new vis.DataSet();
-        let allEdges = new vis.DataSet();
+            let network = null;
 
-        const showStatus = (message, isError = false, isLoading = false) => {
-            let content = '';
-            if (isLoading) content = `<div class="flex justify-center items-center"><div class="spinner mr-3"></div><p>${message}</p></div>`;
-            else content = `<p class="${isError ? 'text-red-600' : 'text-green-600'} font-semibold">${message}</p>`;
-            statusArea.innerHTML = content;
-        };
-
-        const renderReport = (results) => {
-            reportContent.innerHTML = '';
-            if (!results || results.length === 0) { reportContent.innerHTML = '<p>Nenhum resultado.</p>'; return; }
-            results.forEach(item => {
-                let el = document.createElement('div');
-                if (item.type === 'SUCESSO') {
-                    el.className = 'p-4 bg-green-50 border-l-4 border-green-500 text-green-800 rounded';
-                    el.innerHTML = `<p class="font-bold">Sucesso</p><p>${item.message}</p>`;
-                } else if (item.type === 'CONFLITO') {
-                    el.className = 'p-4 bg-red-50 border-l-4 border-red-500 text-red-800 rounded';
-                    el.innerHTML = `<p class="font-bold">Conflito</p><p><strong>Elemento:</strong> <code>${item.element}</code></p><p><strong>Mensagem:</strong> ${item.message}</p><p class="mt-2 pt-2 border-t border-red-200"><strong>Sugestão IA:</strong> <span class="italic">${item.suggestion_llm}</span></p>`;
-                } else if (item.type === 'ERRO') {
-                    el.className = 'p-4 bg-yellow-50 border-l-4 border-yellow-500 text-yellow-800 rounded';
-                    el.innerHTML = `<p class="font-bold">Aviso</p><p>${item.message}</p>`;
-                }
-                if(el) reportContent.appendChild(el);
-            });
-        };
-
-        uploadForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(uploadForm);
-            showStatus('A validar e a processar o modelo...', false, true);
-            validateBtn.disabled = true;
-            mainContent.classList.add('hidden');
-            try {
-                const response = await fetch('/validate', { method: 'POST', body: formData });
-                const results = await response.json();
-                if (!response.ok) throw new Error(results.error || `Erro do servidor: ${response.status}`);
-                showStatus('Validação e carregamento concluídos!', false);
-                renderReport(results);
-                mainContent.classList.remove('hidden');
-                addChatMessage('Modelo validado e carregado. Pode fazer perguntas.', 'bot');
-                resetGraph();
-                populateOntologyExplorer();
-            } catch (error) {
-                showStatus(`Erro: ${error.message}`, true);
-            } finally {
-                validateBtn.disabled = false;
-            }
-        });
-
-        const addChatMessage = (message, sender) => {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `chat-message p-3 rounded-lg max-w-xs md:max-w-md break-words shadow-sm ${sender === 'user' ? 'bg-indigo-500 text-white self-end' : 'bg-gray-200 text-gray-800 self-start'}`;
-            messageDiv.innerHTML = message.replace(/\n/g, '<br>');
-            chatWindow.appendChild(messageDiv);
-            chatWindow.scrollTop = chatWindow.scrollHeight;
-        };
-        
-        const drawOrUpdateGraph = (graphData) => {
-            if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
-                if (allNodes.length === 0) graphContainer.innerHTML = '<p class="p-4 text-gray-500 text-center">Nenhum dado para visualizar.</p>';
-                return;
-            }
-            
-            if (network) {
-                network.destroy();
-                network = null;
-            }
-
-            allNodes.clear();
-            allEdges.clear();
-            allNodes.add(graphData.nodes);
-            allEdges.add(graphData.edges);
-            
-            const data = { nodes: allNodes, edges: allEdges };
-            
-            // --- INÍCIO DA MODIFICAÇÃO ---
-            const options = {
-                nodes: {
-                    shape: 'box',
-                    margin: 15,
-                    widthConstraint: { minimum: 150 }
-                },
-                edges: {
-                    font: { align: 'middle', size: 12, color: '#4b5563', background: 'rgba(255, 255, 255, 0.8)', strokeWidth: 0 },
-                    smooth: { type: 'continuous' } // 'continuous' é bom para layouts orgânicos
-                },
-                physics: {
-                    enabled: true,
-                    solver: 'barnesHut',
-                    barnesHut: {
-                        gravitationalConstant: -60000, // Força de repulsão muito forte
-                        centralGravity: 0.25,          // Força que puxa o grafo para o centro
-                        springLength: 400,             // Aumenta a distância ideal das arestas
-                        springConstant: 0.02,          // Molas menos rígidas para permitir o espaçamento
-                        damping: 0.3,                  // Amortece o movimento para estabilizar mais rápido
-                        avoidOverlap: 1                // Prevenção máxima de sobreposição
-                    },
-                },
-                interaction: { 
-                    hover: true, 
-                    navigationButtons: true, 
-                    keyboard: true,
-                    tooltipDelay: 200 // Mostra tooltips mais rápido
-                }
+            const addChatMessage = (message, sender) => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message p-3 rounded-lg max-w-2xl break-words shadow-sm ${sender === 'user' ? 'bg-indigo-500 text-white self-end ml-auto' : 'bg-gray-200 text-gray-800 self-start mr-auto'}`;
+                messageDiv.innerHTML = message.replace(/\n/g, '<br>');
+                chatWindow.appendChild(messageDiv);
+                chatWindow.scrollTop = chatWindow.scrollHeight;
             };
-            // --- FIM DA MODIFICAÇÃO ---
 
-            graphContainer.innerHTML = '';
-            network = new vis.Network(graphContainer, data, options);
-            
-            // Desliga a física após um tempo para poupar recursos, deixando o grafo interativo
-            network.on("stabilizationIterationsDone", () => {
-                network.setOptions({ physics: false });
-            });
-            
-            network.on("doubleClick", handleDoubleClick);
-        };
+            const drawGraph = (graphData) => {
+                if (network) { network.destroy(); network = null; }
+                if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
+                     graphContainer.innerHTML = '<p class="p-4 text-gray-500 text-center">Nenhum dado para visualizar.</p>';
+                     return;
+                }
+                const data = { nodes: new vis.DataSet(graphData.nodes), edges: new vis.DataSet(graphData.edges) };
+                const options = {
+                    nodes: { shape: 'box', margin: 15, widthConstraint: { minimum: 150 } },
+                    edges: { font: { align: 'middle', size: 12, color: '#4b5563', background: 'rgba(255, 255, 255, 0.8)', strokeWidth: 0 }, smooth: { type: 'continuous' } },
+                    physics: { solver: 'barnesHut', barnesHut: { gravitationalConstant: -60000, centralGravity: 0.25, springLength: 400, springConstant: 0.02, damping: 0.3, avoidOverlap: 1 }, },
+                    interaction: { hover: true, navigationButtons: true, keyboard: true, tooltipDelay: 200 }
+                };
+                graphContainer.innerHTML = '';
+                network = new vis.Network(graphContainer, data, options);
+                network.on("stabilizationIterationsDone", () => network.setOptions({ physics: false }));
+                network.on("doubleClick", async (params) => {
+                    if (params.nodes.length > 0) {
+                        const nodeId = params.nodes[0];
+                        const nodeObject = data.nodes.get(nodeId);
+                        addChatMessage(`Explorando: '${nodeObject.label}'`, 'user');
+                        const graphResponse = await fetch(`/graph-data?object=${encodeURIComponent(nodeObject.label)}`);
+                        const newGraphData = await graphResponse.json();
+                        drawGraph(newGraphData);
+                    }
+                });
+            };
 
-        const handleDoubleClick = async (params) => {
-            const { nodes } = params;
-            if (nodes.length > 0) {
-                const nodeId = nodes[0];
-                addChatMessage(`Explorando: '${allNodes.get(nodeId).label}'`, 'bot');
+            const sendMessage = async () => {
+                const message = userInput.value.trim();
+                if (!message) return;
+                addChatMessage(message, 'user');
+                userInput.value = '';
                 try {
-                    const response = await fetch('/api/expand-graph', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ node_uri: nodeId }) });
-                    const newData = await response.json();
-                    if (newData.nodes && newData.nodes.length > 1) {
-                        drawOrUpdateGraph(newData);
-                        network.once('stabilizationIterationsDone', () => {
-                            network.focus(nodeId, { scale: 1.2, animation: true });
-                        });
-                    } else {
-                         addChatMessage(`Nó '${allNodes.get(nodeId).label}' não possui mais conexões.`, 'bot');
+                    const response = await fetch('/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: message }) });
+                    const data = await response.json();
+                    addChatMessage(data.answer, 'bot');
+                    if (data.object) {
+                        const graphResponse = await fetch(`/graph-data?object=${encodeURIComponent(data.object)}`);
+                        const graphData = await graphResponse.json();
+                        drawGraph(graphData);
                     }
                 } catch (error) {
-                    addChatMessage('Ocorreu um erro ao buscar mais informações.', 'bot');
+                    addChatMessage('Ocorreu um erro ao comunicar com o servidor.', 'bot');
                 }
-            }
-        };
+            };
 
-        const sendMessage = async () => {
-            const question = userInput.value.trim();
-            if (!question) return;
-            addChatMessage(question, 'user');
-            userInput.value = '';
-            try {
-                const response = await fetch('/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) });
-                const data = await response.json();
-                addChatMessage(data.answer, 'bot');
-                drawOrUpdateGraph(data.graph_data);
+            const resetGraph = () => {
+                if (network) { network.destroy(); network = null; }
+                graphContainer.innerHTML = '<p class="p-4 text-gray-500 text-center">Grafo reiniciado.</p>';
+            };
+            
+            const showStatus = (message, isError = false, isLoading = false) => {
+                let content = '';
+                if (isLoading) content = `<div class="flex justify-center items-center"><div class="spinner mr-3"></div><p>${message}</p></div>`;
+                else content = `<p class="${isError ? 'text-red-600' : 'text-green-600'} font-semibold">${message}</p>`;
+                statusArea.innerHTML = content;
+            };
 
-                if (network && data.graph_data && data.graph_data.nodes.length > 0) {
-                    const mainNodeId = data.graph_data.nodes[0].id;
-                    network.once('stabilizationIterationsDone', () => {
-                        network.focus(mainNodeId, { scale: 1.2, animation: true });
-                    });
-                }
-            } catch (error) {
-                addChatMessage('Ocorreu um erro.', 'bot');
-            }
-        };
-
-        const resetGraph = () => {
-            if (network) { network.destroy(); network = null; }
-            allNodes.clear();
-            allEdges.clear();
-            graphContainer.innerHTML = '<p class="p-4 text-gray-500 text-center">Grafo reiniciado.</p>';
-        };
-
-        const populateOntologyExplorer = async () => {
-            try {
-                const response = await fetch('/ontology-summary');
-                const data = await response.json();
-                relationSelect.innerHTML = '<option value="">-- Selecione a Relação --</option>';
-                data.relations.forEach(rel => {
-                    const option = document.createElement('option');
-                    option.value = rel;
-                    option.textContent = rel;
-                    relationSelect.appendChild(option);
+            const renderReport = (results) => {
+                reportContent.innerHTML = '';
+                if (!results || results.length === 0) { reportContent.innerHTML = '<p>Nenhum resultado.</p>'; return; }
+                results.forEach(item => {
+                    let el = document.createElement('div');
+                    if (item.type === 'SUCESSO') {
+                        el.className = 'p-4 bg-green-50 border-l-4 border-green-500 text-green-800 rounded';
+                        el.innerHTML = `<p class="font-bold">Sucesso</p><p>${item.message}</p>`;
+                    } else if (item.type === 'CONFLITO') {
+                        el.className = 'p-4 bg-red-50 border-l-4 border-red-500 text-red-800 rounded';
+                        el.innerHTML = `<p class="font-bold">Conflito</p><p><strong>Elemento:</strong> <code>${item.element}</code></p><p><strong>Mensagem:</strong> ${item.message}</p><p class="mt-2 pt-2 border-t border-red-200"><strong>Sugestão IA:</strong> <span class="italic">${item.suggestion_llm}</span></p>`;
+                    } else if (item.type === 'ERRO') {
+                        el.className = 'p-4 bg-yellow-50 border-l-4 border-yellow-500 text-yellow-800 rounded';
+                        el.innerHTML = `<p class="font-bold">Aviso</p><p>${item.message}</p>`;
+                    }
+                    if(el) reportContent.appendChild(el);
                 });
-                objectSelect.innerHTML = '<option value="">-- Selecione o Objeto --</option>';
-                data.types.forEach(type => {
-                    const optgroup = document.createElement('optgroup');
-                    optgroup.label = type.type;
-                    type.examples.forEach(ex => {
+            };
+
+            const populateOntologyExplorer = async () => {
+                try {
+                    const response = await fetch('/ontology-summary');
+                    const data = await response.json();
+                    relationSelect.innerHTML = '<option value="">-- Selecione a Relação --</option>';
+                    data.relations.forEach(rel => {
                         const option = document.createElement('option');
-                        option.value = ex;
-                        option.textContent = ex;
-                        optgroup.appendChild(option);
+                        option.value = rel;
+                        option.textContent = rel;
+                        relationSelect.appendChild(option);
                     });
-                    objectSelect.appendChild(optgroup);
-                });
-            } catch (error) {
-                console.error("Erro ao popular construtor de consultas:", error);
-            }
-        };
-        const checkSelections = () => { generateQueryBtn.disabled = !(relationSelect.value && objectSelect.value); };
-        const generateQuestion = () => {
-            const relation = relationSelect.value;
-            const object = objectSelect.value;
-            if(!relation || !object) return;
-            userInput.value = `Qual a relação '${relation}' para o objeto '${object}'?`;
-            userInput.focus();
-        };
+                    objectSelect.innerHTML = '<option value="">-- Selecione o Objeto --</option>';
+                    data.types.forEach(type => {
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = type.type;
+                        type.examples.forEach(ex => {
+                            const option = document.createElement('option');
+                            option.value = ex;
+                            option.textContent = ex;
+                            optgroup.appendChild(option);
+                        });
+                        objectSelect.appendChild(optgroup);
+                    });
+                } catch (error) { console.error("Erro ao popular construtor:", error); }
+            };
 
-        sendBtn.addEventListener('click', sendMessage);
-        userInput.addEventListener('keypress', (e) => e.key === 'Enter' && sendMessage());
-        resetBtn.addEventListener('click', resetGraph);
-        fullGraphBtn.addEventListener('click', async () => {
-            addChatMessage('Gerando o grafo completo...', 'bot');
-            try {
-                const response = await fetch('/api/full-graph');
-                const data = await response.json();
-                if (data.nodes.length >= 500) addChatMessage('Aviso: Grafo grande, exibindo 500 relações.', 'bot');
-                drawOrUpdateGraph(data);
-            } catch (error) {
-                addChatMessage('Ocorreu um erro ao gerar o grafo completo.', 'bot');
-            }
+            const checkSelections = () => { generateQueryBtn.disabled = !(relationSelect.value && objectSelect.value); };
+            const generateQuestion = () => {
+                const relation = relationSelect.value;
+                const object = objectSelect.value;
+                if(!relation || !object) return;
+                userInput.value = `Qual a relação '${relation}' para o objeto '${object}'?`;
+                userInput.focus();
+            };
+
+            uploadForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(uploadForm);
+                showStatus('A validar e a processar o modelo...', false, true);
+                validateBtn.disabled = true;
+                mainContent.classList.add('hidden');
+                try {
+                    const response = await fetch('/validate', { method: 'POST', body: formData });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || `Erro do servidor: ${response.status}`);
+                    showStatus('Validação e carregamento concluídos!', false);
+                    renderReport(data);
+                    mainContent.classList.remove('hidden');
+                    addChatMessage('Modelo validado e carregado. Pode fazer perguntas.', 'bot');
+                    resetGraph();
+                    populateOntologyExplorer();
+                } catch (error) {
+                    showStatus(`Erro: ${error.message}`, true);
+                } finally {
+                    validateBtn.disabled = false;
+                }
+            });
+
+            sendBtn.addEventListener('click', sendMessage);
+            userInput.addEventListener('keypress', (e) => e.key === 'Enter' && sendMessage());
+            resetBtn.addEventListener('click', resetGraph);
+            fullGraphBtn.addEventListener('click', async () => {
+                addChatMessage('Gerando o grafo completo...', 'bot');
+                try {
+                    const response = await fetch('/api/full-graph');
+                    const data = await response.json();
+                    if (data.nodes.length >= 500) addChatMessage('Aviso: Grafo grande, exibindo 500 relações.', 'bot');
+                    drawGraph(data);
+                } catch (error) {
+                    addChatMessage('Ocorreu um erro ao gerar o grafo completo.', 'bot');
+                }
+            });
+            relationSelect.addEventListener('change', checkSelections);
+            objectSelect.addEventListener('change', checkSelections);
+            generateQueryBtn.addEventListener('click', generateQuestion);
         });
-        relationSelect.addEventListener('change', checkSelections);
-        objectSelect.addEventListener('change', checkSelections);
-        generateQueryBtn.addEventListener('click', generateQuestion);
-
     </script>
 </body>
 </html>

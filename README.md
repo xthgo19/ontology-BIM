@@ -20,6 +20,8 @@ Gestor da Base de Conhecimento: app/services/fuseki_manager.py
 
 Lógica do Chatbot: app/services/chatbot_logic.py
 
+Análise Térmica: app/services/thermal_analysis.py - Módulo para cálculo da transmitância térmica (Valor U) de paredes, considerando múltiplas camadas e suas propriedades.
+
 ## 🚀 Como Rodar
 Clone o repositório:
 
@@ -145,3 +147,36 @@ A tarefa de validação é enviada para uma fila de processamento em segundo pla
 O utilizador pode fechar o navegador e é notificado (ex: por email ou numa dashboard) quando o relatório estiver pronto.
 
 Gestão de Múltiplos Projetos: A aplicação atual lida com um ficheiro de cada vez. Uma evolução natural seria adicionar um sistema de utilizadores e uma dashboard onde cada utilizador pudesse gerir e consultar os seus diferentes projetos carregados.
+
+5. Análise Preditiva de Desempenho e Otimização de Projeto (Novo)
+
+Este projeto agora inclui um módulo inicial para Análise Preditiva de Desempenho, começando com o cálculo da transmitância térmica (Valor U) de paredes. Esta funcionalidade permite:
+
+Cálculo de Valor U: Utiliza as propriedades de espessura e condutividade de múltiplas camadas para determinar a eficiência térmica de uma parede.
+
+Integração Futura: Abre caminho para simulações mais complexas de desempenho energético, iluminação natural e acústica, transformando o ontology-BIM numa ferramenta proativa para otimização de design.
+
+Para utilizar esta funcionalidade, envie uma requisição POST para `/calculate_u_value` com um JSON contendo uma lista de camadas, cada uma com 'thickness' (em metros) e 'conductivity' (em W/(m.K)).
+
+Exemplo de requisição:
+
+```json
+{
+  "layers": [
+    {"thickness": 0.15, "conductivity": 0.77},  
+    {"thickness": 0.05, "conductivity": 0.035}, 
+    {"thickness": 0.015, "conductivity": 0.22}  
+  ]
+}
+```
+
+Exemplo de resposta:
+
+```json
+{
+  "u_value": 1.23
+}
+```
+
+
+ 

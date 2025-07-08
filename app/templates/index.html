@@ -14,6 +14,21 @@
         .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #4f46e5; animation: spin 1s ease infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .vis-tooltip {
+            position: absolute;
+            background-color: white;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-family: 'Inter', sans-serif;
+            max-width: 300px;
+            text-align: left;
+            pointer-events: none;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
@@ -92,6 +107,8 @@
             const generateQueryBtn = document.getElementById('generate-query-btn');
 
             let network = null;
+            let conflictingNodesList = [];
+            let conflictMessages = {};
 
             const addChatMessage = (message, sender) => {
                 const messageDiv = document.createElement('div');
@@ -101,16 +118,59 @@
                 chatWindow.scrollTop = chatWindow.scrollHeight;
             };
 
+            const applyConflictHighlighting = (graphData) => {
+                if (Object.keys(conflictMessages).length > 0 && graphData && graphData.nodes) {
+                    const conflictingIds = new Set(
+                        Object.keys(conflictMessages).map(nodeId => {
+                            const parts = nodeId.split(/[:#]/);
+                            return parts[parts.length - 1];
+                        })
+                    );
+
+                    graphData.nodes.forEach(node => {
+                        const graphNodeId = node.id.substring(node.id.lastIndexOf('#') + 1) || node.id.substring(node.id.lastIndexOf('/') + 1);
+                        if (conflictingIds.has(graphNodeId)) {
+                            node.color = { background: '#fecaca', border: '#ef4444' };
+                            
+                            const originalUri = Object.keys(conflictMessages).find(key => key.endsWith(graphNodeId));
+                            if (originalUri) {
+                                const message = conflictMessages[originalUri];
+                                
+                                const tooltipElement = document.createElement('div');
+                                tooltipElement.style.whiteSpace = 'normal';
+                                tooltipElement.style.overflowWrap = 'break-word';
+                                tooltipElement.style.wordWrap = 'break-word';
+                                tooltipElement.innerHTML = `<div style="font-weight: bold; margin-bottom: 5px; color: #dc2626;">⚠️ Conflito de Validação</div><div>${message}</div>`;
+                                node.title = tooltipElement;
+                            }
+                        }
+                    });
+                }
+                return graphData;
+            };
+            
             const drawGraph = (graphData) => {
                 if (network) { network.destroy(); network = null; }
                 if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
                      graphContainer.innerHTML = '<p class="p-4 text-gray-500 text-center">Nenhum dado para visualizar.</p>';
                      return;
                 }
-                const data = { nodes: new vis.DataSet(graphData.nodes), edges: new vis.DataSet(graphData.edges) };
+
+                const highlightedGraphData = applyConflictHighlighting(graphData);
+                const data = { nodes: new vis.DataSet(highlightedGraphData.nodes), edges: new vis.DataSet(highlightedGraphData.edges) };
+                
                 const options = {
                     nodes: { shape: 'box', margin: 15, widthConstraint: { minimum: 150 } },
-                    edges: { font: { align: 'middle', size: 12, color: '#4b5563', background: 'rgba(255, 255, 255, 0.8)', strokeWidth: 0 }, smooth: { type: 'continuous' } },
+                    edges: {
+                        font: { align: 'middle', size: 12, color: '#4b5563', background: 'rgba(255, 255, 255, 0.8)', strokeWidth: 0 },
+                        smooth: { type: 'continuous' },
+                        // MUDANÇA: Impede que as arestas herdem a cor dos nós.
+                        color: {
+                            color: '#a0aec0',       // Cor cinza padrão para as arestas
+                            highlight: '#4f46e5',   // Cor roxa ao passar o rato por cima
+                            inherit: false          // Configuração principal para não herdar a cor
+                        }
+                    },
                     physics: { solver: 'barnesHut', barnesHut: { gravitationalConstant: -60000, centralGravity: 0.25, springLength: 400, springConstant: 0.02, damping: 0.3, avoidOverlap: 1 }, },
                     interaction: { hover: true, navigationButtons: true, keyboard: true, tooltipDelay: 200 }
                 };
@@ -150,7 +210,7 @@
 
             const resetGraph = () => {
                 if (network) { network.destroy(); network = null; }
-                graphContainer.innerHTML = '<p class="p-4 text-gray-500 text-center">Grafo reiniciado.</p>';
+                graphContainer.innerHTML = '<p class="p-4 text-gray-500 text-center">Grafo reiniciado. Faça uma consulta para visualizar.</p>';
             };
             
             const showStatus = (message, isError = false, isLoading = false) => {
@@ -204,6 +264,29 @@
                     });
                 } catch (error) { console.error("Erro ao popular construtor:", error); }
             };
+            
+            const loadFullGraph = async () => {
+                addChatMessage('A gerar o grafo completo para visualização...', 'bot');
+                try {
+                    const response = await fetch('/api/full-graph');
+                    const graphData = await response.json();
+                    if (graphData.error) throw new Error(graphData.error);
+                    
+                    if (graphData.nodes.length >= 500) {
+                        addChatMessage('Aviso: Grafo grande, a exibir as primeiras 500 relações.', 'bot');
+                    }
+                    
+                    drawGraph(graphData);
+                    
+                    if (conflictingNodesList.length > 0) {
+                        addChatMessage(`Conflitos encontrados destacados.`, 'bot');
+                    }
+
+                } catch (error) {
+                    addChatMessage(`Ocorreu um erro ao gerar o grafo: ${error.message}`, 'bot');
+                    console.error("Error loading full graph:", error);
+                }
+            };
 
             const checkSelections = () => { generateQueryBtn.disabled = !(relationSelect.value && objectSelect.value); };
             const generateQuestion = () => {
@@ -220,15 +303,31 @@
                 showStatus('A validar e a processar o modelo...', false, true);
                 validateBtn.disabled = true;
                 mainContent.classList.add('hidden');
+                
+                conflictingNodesList = [];
+                conflictMessages = {};
+                
                 try {
                     const response = await fetch('/validate', { method: 'POST', body: formData });
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.error || `Erro do servidor: ${response.status}`);
+                    
+                    conflictingNodesList = data.conflicting_nodes || [];
+                    if (data.validation) {
+                        data.validation.forEach(item => {
+                            if(item.type === 'CONFLITO' && item.element) {
+                                conflictMessages[item.element] = item.message;
+                            }
+                        });
+                    }
+
                     showStatus('Validação e carregamento concluídos!', false);
-                    renderReport(data);
+                    renderReport(data.validation);
                     mainContent.classList.remove('hidden');
                     addChatMessage('Modelo validado e carregado. Pode fazer perguntas.', 'bot');
-                    resetGraph();
+                    
+                    loadFullGraph();
+                    
                     populateOntologyExplorer();
                 } catch (error) {
                     showStatus(`Erro: ${error.message}`, true);
@@ -240,20 +339,12 @@
             sendBtn.addEventListener('click', sendMessage);
             userInput.addEventListener('keypress', (e) => e.key === 'Enter' && sendMessage());
             resetBtn.addEventListener('click', resetGraph);
-            fullGraphBtn.addEventListener('click', async () => {
-                addChatMessage('Gerando o grafo completo...', 'bot');
-                try {
-                    const response = await fetch('/api/full-graph');
-                    const data = await response.json();
-                    if (data.nodes.length >= 500) addChatMessage('Aviso: Grafo grande, exibindo 500 relações.', 'bot');
-                    drawGraph(data);
-                } catch (error) {
-                    addChatMessage('Ocorreu um erro ao gerar o grafo completo.', 'bot');
-                }
-            });
+            fullGraphBtn.addEventListener('click', loadFullGraph);
             relationSelect.addEventListener('change', checkSelections);
             objectSelect.addEventListener('change', checkSelections);
             generateQueryBtn.addEventListener('click', generateQuestion);
+
+            resetGraph();
         });
     </script>
 </body>

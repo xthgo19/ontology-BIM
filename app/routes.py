@@ -1,6 +1,6 @@
 import os
 import uuid
-from flask import render_template, request, jsonify, current_app
+from flask import render_template, request, jsonify, current_app, send_from_directory
 from app import app
 from .services import validation_engine, fuseki_manager, chatbot_logic
 from .services.thermal_analysis import calculate_u_value
@@ -22,16 +22,34 @@ def validate_ifc_model():
     try:
         file.save(ifc_file_path)
         validation_results = validation_engine.validate_model(ifc_file_path)
+
+        # Extrai os nós com conflito para destacar no grafo
+        conflicting_nodes = [
+            result['element']
+            for result in validation_results
+            if result.get('type') == 'CONFLITO' and result.get('element')
+        ]
+        
+        # Converte para RDF e carrega no Fuseki
         rdf_graph = fuseki_manager.convert_ifc_to_rdf(ifc_file_path)
         if not rdf_graph or not fuseki_manager.upload_to_fuseki(rdf_graph):
             validation_results.append({"type": "ERRO", "message": "Falha ao carregar modelo no motor de consulta."})
-            return jsonify(validation_results), 500
-        return jsonify(validation_results)
+            return jsonify({
+                "validation": validation_results, 
+                "conflicting_nodes": conflicting_nodes
+            }), 500
+            
+        # Retorna o relatório e os nós com conflito
+        return jsonify({
+            "validation": validation_results,
+            "conflicting_nodes": conflicting_nodes
+        })
     except Exception as e:
         current_app.logger.error(f"ERRO CRÍTICO: {e}", exc_info=True)
-        return jsonify({"error": "Ocorreu um erro inesperado no servidor."}), 500
-    finally:
+        # Garante que o ficheiro é removido em caso de erro
         if os.path.exists(ifc_file_path): os.remove(ifc_file_path)
+        return jsonify({"error": "Ocorreu um erro inesperado no servidor."}), 500
+    # O ficheiro não é removido no `finally` para permitir a visualização 3D na Tarefa 2
 
 @app.route("/ask", methods=["POST"])
 def ask_chatbot():
@@ -44,6 +62,7 @@ def get_graph_data():
     object_name = request.args.get('object')
     if not object_name: return jsonify({"nodes": [], "edges": []})
     sparql = chatbot_logic._get_sparql_wrapper()
+    # Assume que o ID no grafo é a URI completa
     uri_query = f'PREFIX rdfs: <{RDFS}> SELECT ?s WHERE {{ ?s rdfs:label "{object_name}" . }} LIMIT 1'
     sparql.setQuery(uri_query)
     uri_results = sparql.query().convert()["results"]["bindings"]

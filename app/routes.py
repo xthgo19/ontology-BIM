@@ -1,72 +1,104 @@
 import os
 import uuid
+import mimetypes
+import subprocess
+import json
 from flask import render_template, request, jsonify, current_app, send_from_directory
+from flask_cors import CORS
 from app import app
 from .services import validation_engine, fuseki_manager, chatbot_logic
 from .services.thermal_analysis import calculate_u_value
 from rdflib.namespace import RDFS
+import ifcopenshell
+
+CORS(app)
+mimetypes.add_type('application/wasm', '.wasm')
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
+@app.route('/ifc_models/<path:filename>')
+def serve_ifc_model(filename):
+    """Serve um ficheiro da pasta de uploads."""
+    return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
+
 @app.route("/validate", methods=["POST"])
 def validate_ifc_model():
-    if "ifc_file" not in request.files: return jsonify({"error": "Nenhum ficheiro enviado."}), 400
+    if "ifc_file" not in request.files:
+        return jsonify({"error": "Nenhum ficheiro enviado."}), 400
     file = request.files["ifc_file"]
     if file.filename == "" or not file.filename.lower().endswith(".ifc"):
         return jsonify({"error": "Ficheiro inválido. Apenas .ifc é suportado."}), 400
 
-    filename = str(uuid.uuid4()) + ".ifc"
-    ifc_file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-    try:
-        file.save(ifc_file_path)
-        validation_results = validation_engine.validate_model(ifc_file_path)
+    ifc_filename = str(uuid.uuid4()) + ".ifc"
+    ifc_file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], ifc_filename)
+    file.save(ifc_file_path)
 
-        # Extrai os nós com conflito para destacar no grafo
-        conflicting_nodes = [
-            result['element']
-            for result in validation_results
-            if result.get('type') == 'CONFLITO' and result.get('element')
-        ]
+    try:
+        glb_filename = ifc_filename.replace(".ifc", ".glb")
+        glb_file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], glb_filename)
         
-        # Converte para RDF e carrega no Fuseki
-        rdf_graph = fuseki_manager.convert_ifc_to_rdf(ifc_file_path)
-        if not rdf_graph or not fuseki_manager.upload_to_fuseki(rdf_graph):
-            validation_results.append({"type": "ERRO", "message": "Falha ao carregar modelo no motor de consulta."})
-            return jsonify({
-                "validation": validation_results, 
-                "conflicting_nodes": conflicting_nodes
-            }), 500
-            
-        # Retorna o relatório e os nós com conflito
+        # !!! ATENÇÃO: VERIFIQUE SE ESTE CAMINHO ESTÁ CORRETO PARA O SEU COMPUTADOR !!!
+        ifc_convert_path = "C:\\Users\\Samuel\\Downloads\\ifcconvert-0.8.2-win64\\IfcConvert.exe"
+        
+        command = [ifc_convert_path, ifc_file_path, glb_file_path]
+        subprocess.run(command, check=True, capture_output=True, text=True)
+        
+        ifc_file = ifcopenshell.open(ifc_file_path)
+        products = ifc_file.by_type("IfcProduct")
+        metadata = {}
+        for product in products:
+            if product.GlobalId:
+                guid = product.GlobalId
+                metadata[guid] = {
+                    "type": product.is_a(),
+                    "name": product.Name,
+                    "GlobalId": guid
+                }
+
+        validation_results = validation_engine.validate_model(ifc_file_path)
+        conflicting_nodes = [r['element'] for r in validation_results if r.get('type') == 'CONFLITO' and r.get('element')]
+        
+        fuseki_manager.upload_to_fuseki(fuseki_manager.convert_ifc_to_rdf(ifc_file_path))
+
+        glb_url_path = f"/ifc_models/{glb_filename}"
+        
         return jsonify({
             "validation": validation_results,
-            "conflicting_nodes": conflicting_nodes
+            "conflicting_nodes": conflicting_nodes,
+            "model_path": glb_url_path,
+            "metadata": metadata  # <-- Envia os metadados para o frontend
         })
+
+    except subprocess.CalledProcessError as e:
+        current_app.logger.error(f"O comando IfcConvert falhou: {e.stderr}")
+        return jsonify({"error": f"Erro crítico na conversão do modelo: {e.stderr}"}), 500
     except Exception as e:
         current_app.logger.error(f"ERRO CRÍTICO: {e}", exc_info=True)
-        # Garante que o ficheiro é removido em caso de erro
-        if os.path.exists(ifc_file_path): os.remove(ifc_file_path)
         return jsonify({"error": "Ocorreu um erro inesperado no servidor."}), 500
-    # O ficheiro não é removido no `finally` para permitir a visualização 3D na Tarefa 2
+    finally:
+        if os.path.exists(ifc_file_path):
+            os.remove(ifc_file_path)
 
 @app.route("/ask", methods=["POST"])
 def ask_chatbot():
     data = request.get_json()
-    if not data or "question" not in data: return jsonify({"error": "Pergunta não fornecida."}), 400
+    if not data or "question" not in data:
+        return jsonify({"error": "Pergunta não fornecida."}), 400
     return jsonify(chatbot_logic.process_user_question(data["question"]))
 
 @app.route('/graph-data')
 def get_graph_data():
     object_name = request.args.get('object')
-    if not object_name: return jsonify({"nodes": [], "edges": []})
+    if not object_name:
+        return jsonify({"nodes": [], "edges": []})
     sparql = chatbot_logic._get_sparql_wrapper()
-    # Assume que o ID no grafo é a URI completa
     uri_query = f'PREFIX rdfs: <{RDFS}> SELECT ?s WHERE {{ ?s rdfs:label "{object_name}" . }} LIMIT 1'
     sparql.setQuery(uri_query)
     uri_results = sparql.query().convert()["results"]["bindings"]
-    if not uri_results: return jsonify({"nodes": [], "edges": []})
+    if not uri_results:
+        return jsonify({"nodes": [], "edges": []})
     node_uri = uri_results[0]['s']['value']
     graph_data = chatbot_logic._get_bidirectional_graph(node_uri, object_name)
     return jsonify(graph_data)

@@ -1,0 +1,22 @@
+body { font-family: 'Inter', sans-serif; }
+#graph-container { width: 100%; height: 500px; border: 1px solid #e2e8f0; background-color: #f8fafc; border-radius: 0.5rem; }
+.chatbot-container { height: 450px; }
+.chat-message { animation: fadeIn 0.3s ease-out; }
+.spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #4f46e5; animation: spin 1s ease infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.vis-tooltip {
+    position: absolute;
+    background-color: white;
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    font-family: 'Inter', sans-serif;
+    max-width: 300px;
+    text-align: left;
+    pointer-events: none;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+}

@@ -66,6 +66,8 @@ python run.py
 
 Aceda à aplicação no seu navegador em http://127.0.0.1:5001.
 
+[Link IfcConvert](https://github.com/IfcOpenShell/IfcOpenShell/releases/tag/ifcconvert-0.8.2)
+
 ________________________________________________________________________________________________
 
 Resumo e Próximos Passos Recomendados

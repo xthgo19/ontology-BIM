@@ -64,6 +64,14 @@ python run.py
 
 Aceda à aplicação no seu navegador em http://127.0.0.1:5001.
 
+## 📊 Novas Funcionalidades
+
+### Visualização de Grafo Completo
+Agora é possível visualizar o grafo completo da ontologia diretamente na aplicação. Isso oferece uma visão abrangente das relações entre os elementos do modelo BIM.
+
+### Expansão de Nós no Grafo
+Ao interagir com o grafo, os utilizadores podem expandir nós específicos para explorar suas conexões e propriedades de forma mais detalhada, facilitando a navegação e a compreensão da estrutura da ontologia.
+
 ________________________________________________________________________________________________
 
 Resumo e Próximos Passos Recomendados
@@ -145,3 +153,4 @@ A tarefa de validação é enviada para uma fila de processamento em segundo pla
 O utilizador pode fechar o navegador e é notificado (ex: por email ou numa dashboard) quando o relatório estiver pronto.
 
 Gestão de Múltiplos Projetos: A aplicação atual lida com um ficheiro de cada vez. Uma evolução natural seria adicionar um sistema de utilizadores e uma dashboard onde cada utilizador pudesse gerir e consultar os seus diferentes projetos carregados.
+

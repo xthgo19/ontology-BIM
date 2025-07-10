@@ -7,10 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     
-    <link rel="stylesheet" href="{{ url_for(\'static\', filename=\'css/style.css\' ) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 
-    <!-- Three.js via CDN com import maps para compatibilidade -->
     <script type="importmap">
         {
             "imports": {
@@ -68,7 +67,7 @@
                         <div class="chatbot-container border border-gray-200 rounded-lg p-4 flex flex-col bg-gray-50 h-96">
                             <div id="chat-window" class="flex-grow overflow-y-auto mb-4 space-y-4 pr-2"></div>
                             <div class="flex">
-                                <input type="text" id="user-input" placeholder="Qual o material de \'floor\'?" class="flex-grow border-2 border-gray-300 rounded-l-lg p-2 focus:border-indigo-500">
+                                <input type="text" id="user-input" placeholder="Qual o material de 'floor'?" class="flex-grow border-2 border-gray-300 rounded-l-lg p-2 focus:border-indigo-500">
                                 <button id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-r-lg">Enviar</button>
                             </div>
                         </div>
@@ -97,7 +96,6 @@
         </div>
     </div>
 
-    <!-- Carregamento do script principal aprimorado -->
-    <script src="{{ url_for(\'static\', filename=\'js/main_enhanced.js\' ) }}" type="module"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}" type="module"></script>
 </body>
 </html>

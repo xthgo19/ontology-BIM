@@ -1,4 +1,4 @@
-import { drawGraph, resetGraph } from './graph.js';
+import { drawGraph, resetGraph, highlightNodeInGraph } from './graph.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
@@ -24,28 +24,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let ifcModel = null;
     let guidToMeshMap = new Map();
     let selectedObject = null;
+    let conflictMessages = {}; // Mantém o estado dos conflitos
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
     // --- MATERIAIS PRÉ-DEFINIDOS ---
-    const wallMaterial = new THREE.MeshBasicMaterial({
-        color: 0x8090a0,
-        transparent: true,
-        opacity: 0.3,
-        depthWrite: false
-    });
+    const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x8090a0, transparent: true, opacity: 0.3, depthWrite: false });
     const defaultMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc });
-    const errorMaterial = new THREE.MeshBasicMaterial({
-        color: 0xff0000,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: 1
-    });
+    const errorMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: 1 });
     const highlightMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 
     // --- LÓGICA ---
-
-    // Função dedicada para redimensionar o visualizador
     function onWindowResize() {
         if (!renderer || !camera) return;
         const width = viewerContainer.clientWidth;
@@ -72,10 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderer.setPixelRatio(window.devicePixelRatio);
         viewerContainer.appendChild(renderer.domElement);
         controls = new OrbitControls(camera, renderer.domElement);
-        
-        // Chama a função de redimensionamento na inicialização
         onWindowResize();
-
         const animate = () => {
             requestAnimationFrame(animate);
             controls.update();
@@ -88,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ifcModel) scene.remove(ifcModel);
         guidToMeshMap.clear();
         const group = new THREE.Group();
-
         elements3dData.forEach(elementData => {
             if (!elementData.vertices || !elementData.indices || elementData.vertices.length === 0) return;
             try {
@@ -96,11 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 geometry.setAttribute('position', new THREE.Float32BufferAttribute(elementData.vertices, 3));
                 geometry.setIndex(new THREE.Uint32BufferAttribute(elementData.indices, 1));
                 geometry.computeVertexNormals();
-
-                let material = (elementData.type === 'IfcWall' || elementData.type === 'IfcWallStandardCase')
-                    ? wallMaterial
-                    : defaultMaterial;
-
+                let material = (elementData.type === 'IfcWall' || elementData.type === 'IfcWallStandardCase') ? wallMaterial : defaultMaterial;
                 const mesh = new THREE.Mesh(geometry, material.clone());
                 mesh.userData = { ...elementData, originalMaterial: mesh.material };
                 group.add(mesh);
@@ -109,11 +90,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error(`Erro ao processar elemento ${elementData.globalId}:`, error);
             }
         });
-
         ifcModel = group;
         ifcModel.rotation.x = -Math.PI / 2;
         scene.add(ifcModel);
-
         const box = new THREE.Box3().setFromObject(ifcModel);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
@@ -140,38 +119,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-        if (highlightedCount > 0) {
-            addChatMessage(`Destacados ${highlightedCount} elementos com conflitos.`, 'bot');
-        }
+        if (highlightedCount > 0) addChatMessage(`Destacados ${highlightedCount} elementos com conflitos.`, 'bot');
     };
 
     function onMouseClick(event) {
-        // Se um objeto já estava selecionado, restaura seu material original
         if (selectedObject) {
             selectedObject.material = selectedObject.userData.originalMaterial;
             selectedObject = null;
         }
-
-        // Calcula a posição do mouse
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
-        
-        // Verifica interseções APENAS com os objetos do modelo IFC, ignorando o chão
-        if (!ifcModel) return; // Garante que o modelo já foi carregado
+        if (!ifcModel) return;
         const intersects = raycaster.intersectObjects(ifcModel.children, true);
-
         if (intersects.length > 0) {
-            // Pega o primeiro objeto que foi atingido
             selectedObject = intersects[0].object;
-            
-            // Aplica o material de destaque amarelo
             selectedObject.material = highlightMaterial;
-
-            // Mostra as informações do objeto no chatbot
             let info = `Objeto selecionado: ${selectedObject.userData.name || 'Sem nome'}`;
-            if (selectedObject.userData.globalId) info += `\nGlobalId: ${selectedObject.userData.globalId}`;
+            if (selectedObject.userData.globalId) {
+                info += `\nGlobalId: ${selectedObject.userData.globalId}`;
+                highlightNodeInGraph(selectedObject.userData.globalId);
+            }
             if (selectedObject.userData.type) info += `\nTipo: ${selectedObject.userData.type}`;
             addChatMessage(info, 'bot');
         }
@@ -183,8 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showStatus('A validar e a processar o modelo...', false, true);
         validateBtn.disabled = true;
         mainContent.classList.add('hidden');
-        let conflictMessages = {};
-
+        conflictMessages = {};
         try {
             setupThreeJs();
             addChatMessage('A validar e a processar o modelo...', 'bot');
@@ -192,7 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error(`Erro do servidor: ${response.status}`);
             const data = await response.json();
             if (data.error) throw new Error(data.error);
-
             if (data.elements_3d_data && data.elements_3d_data.length > 0) {
                 loadProcessedIFCModel(data.elements_3d_data);
                 if (data.validation) {
@@ -206,15 +173,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 addChatMessage('Nenhum dado de geometria 3D foi recebido do backend.', 'bot');
             }
-
             showStatus('Validação e carregamento concluídos!', false);
             renderReport(data.validation);
             mainContent.classList.remove('hidden');
-            
-            // Força um redimensionamento final para garantir que tudo está visível
             onWindowResize();
-
-            loadFullGraph(conflictMessages);
+            loadFullGraph();
             populateOntologyExplorer();
         } catch (error) {
             showStatus(`Erro: ${error.message}`, true);
@@ -225,7 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Funções de UI e API ---
     const addChatMessage = (message, sender) => {
         const messageDiv = document.createElement('div');
         messageDiv.className = `chat-message p-3 rounded-lg max-w-2xl break-words shadow-sm ${sender === 'user' ? 'bg-indigo-500 text-white self-end ml-auto' : 'bg-gray-200 text-gray-800 self-start mr-auto'}`;
@@ -245,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.object) {
                 const graphResponse = await fetch(`/graph-data?object=${encodeURIComponent(data.object)}`);
                 const graphData = await graphResponse.json();
-                drawGraph(graphData, {}, addChatMessage);
+                drawGraph(graphData, conflictMessages, addChatMessage); // Passa os conflitos
             }
         } catch (error) {
             addChatMessage('Ocorreu um erro ao comunicar com o servidor.', 'bot');
@@ -303,7 +265,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (error) { console.error("Erro ao popular construtor:", error); }
     };
-    const loadFullGraph = async (conflictMessages) => {
+    
+    const loadFullGraph = async () => {
         addChatMessage('A gerar o grafo completo...', 'bot');
         try {
             const response = await fetch('/api/full-graph');
@@ -315,6 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addChatMessage(`Ocorreu um erro ao gerar o grafo: ${error.message}`, 'bot');
         }
     };
+
     const checkSelections = () => {
         generateQueryBtn.disabled = !(relationSelect.value && objectSelect.value);
     };
@@ -331,11 +295,11 @@ document.addEventListener('DOMContentLoaded', () => {
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     resetBtn.addEventListener('click', () => resetGraph());
-    fullGraphBtn.addEventListener('click', () => loadFullGraph({}));
+    
+    fullGraphBtn.addEventListener('click', loadFullGraph);
+
     relationSelect.addEventListener('change', checkSelections);
     objectSelect.addEventListener('change', checkSelections);
     generateQueryBtn.addEventListener('click', generateQuestion);
-    
-    // Listener de redimensionamento global
     window.addEventListener('resize', onWindowResize);
 });

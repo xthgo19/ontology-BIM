@@ -76,3 +76,29 @@ export const resetGraph = () => {
     if (network) { network.destroy(); network = null; }
     graphContainer.innerHTML = '<p class="p-4 text-gray-500 text-center">Grafo reiniciado. Faça uma consulta para visualizar.</p>';
 };
+
+export const highlightNodeInGraph = (globalId) => {
+    if (!network || !globalId) {
+        return;
+    }
+
+    const nodes = network.body.data.nodes.get({
+        filter: function (item) {
+            return item.id.endsWith(globalId);
+        }
+    });
+
+    if (nodes && nodes.length > 0) {
+        const nodeId = nodes[0].id;
+
+        network.setSelection({ nodes: [nodeId], edges: [] });
+
+        network.focus(nodeId, {
+            scale: 1.5,
+            animation: {
+                duration: 1000,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+    }
+};

@@ -1,0 +1,20 @@
+{
+  "total_elements": 14,
+  "valid_elements": 14,
+  "element_types": {
+    "IfcBuildingElementProxy": 2,
+    "IfcEarthworksFill": 1,
+    "IfcSlab": 3,
+    "IfcWall": 4,
+    "IfcFurniture": 1,
+    "IfcSpace": 2,
+    "IfcSpatialZone": 1
+  },
+  "sample_element": {
+    "globalId": "2F44QMqSH3TOkM$SZoqCBe",
+    "type": "IfcBuildingElementProxy",
+    "name": "origin",
+    "vertices_count": 24,
+    "indices_count": 36
+  }
+}

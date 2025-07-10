@@ -69,7 +69,7 @@ docker-compose up -d
 - **Ollama**: Execute no terminal:
 
 ```bash
-docker exec -it ollama-server ollama pull gemma:2b
+docker exec -it ollama-server ollama pull gemma3:4b
 ```
 
 ### 6. Execute o projeto:

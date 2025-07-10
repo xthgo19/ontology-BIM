@@ -7,15 +7,15 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for(\'static\', filename=\'css/style.css\' ) }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 
+    <!-- Three.js via CDN com import maps para compatibilidade -->
     <script type="importmap">
         {
             "imports": {
                 "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-                "three/examples/jsm/controls/OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js",
-                "three/examples/jsm/loaders/GLTFLoader.js": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js"
+                "three/examples/jsm/controls/OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js"
             }
         }
     </script>
@@ -25,6 +25,9 @@
         <header class="text-center mb-6">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Assistente e Validador BIM</h1>
             <p class="text-md md:text-lg text-gray-600 mt-2">Carregue, valide e consulte os seus modelos IFC de forma inteligente.</p>
+            <div class="mt-2 text-sm text-blue-600 bg-blue-50 p-2 rounded-lg">
+                <strong>Nova versão:</strong> Processamento 3D otimizado com Three.js puro - sem dependências complexas!
+            </div>
         </header>
 
         <section id="upload-section" class="bg-white p-6 rounded-xl shadow-lg mb-6">
@@ -48,7 +51,15 @@
                 
                 <section class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
                     <h2 class="text-2xl font-semibold text-gray-800 mb-4">Visualizador 3D</h2>
-                    <div id="viewer-container" class="w-full h-[60vh] border border-gray-200 rounded-lg relative"></div>
+                    <div class="mb-2 text-sm text-gray-600">
+                        <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded mr-2">✓ Three.js Puro</span>
+                        <span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-2">✓ Processamento Backend</span>
+                        <span class="inline-block bg-purple-100 text-purple-800 px-2 py-1 rounded">✓ Destaque de Erros</span>
+                    </div>
+                    <div id="viewer-container" class="w-full h-[60vh] border border-gray-200 rounded-lg relative cursor-pointer"></div>
+                    <div class="mt-2 text-xs text-gray-500">
+                        Clique nos objetos 3D para selecioná-los e ver informações detalhadas.
+                    </div>
                 </section>
                 
                 <div class="grid md:grid-cols-2 gap-6">
@@ -57,7 +68,7 @@
                         <div class="chatbot-container border border-gray-200 rounded-lg p-4 flex flex-col bg-gray-50 h-96">
                             <div id="chat-window" class="flex-grow overflow-y-auto mb-4 space-y-4 pr-2"></div>
                             <div class="flex">
-                                <input type="text" id="user-input" placeholder="Qual o material de 'floor'?" class="flex-grow border-2 border-gray-300 rounded-l-lg p-2 focus:border-indigo-500">
+                                <input type="text" id="user-input" placeholder="Qual o material de \'floor\'?" class="flex-grow border-2 border-gray-300 rounded-l-lg p-2 focus:border-indigo-500">
                                 <button id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-r-lg">Enviar</button>
                             </div>
                         </div>
@@ -86,6 +97,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}" type="module"></script>
+    <!-- Carregamento do script principal aprimorado -->
+    <script src="{{ url_for(\'static\', filename=\'js/main_enhanced.js\' ) }}" type="module"></script>
 </body>
 </html>
